@@ -1,16 +1,13 @@
 var canvas=document.getElementById('myCanvas');
 var ctx=canvas.getContext('2d');
+
+
 var game=function(){
-	
     var width=canvas.width;
     var height=canvas.height;
     var right=false,left=false;//左右键是否被按下
     var flag=true; //是否在运行
-    var stop_callBack;//结束后的回调函数
-
-
     var Stage=function(f){ 
-        stop_callBack=f;//结束后的回调函数
 
         var ballPos=this.initialPos();
         //构造一个球的示例，半径为8
@@ -49,6 +46,7 @@ var game=function(){
         this.exists=new Array(this.row);//行数
         for(var i=0;i<this.col;i++){
             this.exists[i]=new Array(this.col);//每行块数
+			var randomNum = Math.random();
             for(var j=0;j<this.col;j++){
 				var randomNum = Math.random();//随即填充砖块
 				if (randomNum >= 0.3) {
@@ -60,21 +58,18 @@ var game=function(){
         }
     }
 
-    //进行舞台的初始化工作
+    //舞台初始化
     Stage.prototype.run=function(){
-        this.bindListeners();//绑定监听器
-
-        var _this=this;
-        this.st=setInterval(function(){
-            _this.nextFrame();
+        this.eventListeners();//绑定监听器
+        var s=this;//直接在setInterval内用this返回的是window，所以要先存一下
+		//设定时刷新画面
+        this.interval=setInterval(function(){
+            s.nextFrame();
         },25)
     }
-    /**
-     * setInerval里面调用的函数，负责绘制每一帧
-     * @return {[type]}
-     */
+    //刷新操作
     Stage.prototype.nextFrame=function(){
-        this.clear();
+        ctx.clearRect(0,0,width,height)
 
         this.bricks.draw();
         this.paddle.draw();
@@ -90,7 +85,7 @@ var game=function(){
         
     }
     //舞台绑定监听器
-    Stage.prototype.bindListeners=function(){
+    Stage.prototype.eventListeners=function(){
         document.addEventListener('keydown',function(e){
             var keyNum=window.event?e.keyCode:e.which;
             switch(keyNum){
@@ -107,64 +102,47 @@ var game=function(){
             }
         },false)
     }
-    Stage.prototype.clear=function(){
-        ctx.clearRect(0,0,width,height)
-    }
- 
+    //边缘碰撞检测
     Stage.prototype.collisionDetect=function(){
         if(this.ball.x+this.ball.r > width||    
             this.ball.x-this.ball.r  <0) //撞击两侧的墙
             this.ball.dx=-this.ball.dx
         if(this.ball.y-this.ball.r <0)    //撞击上墙
             this.ball.dy=-this.ball.dy 
-        /**
-         * TODO：挡板侧面碰到球以后怎么办
-         *球和挡板接触后的反弹,做的还不是很自然
-         * 
-         */
-        if(this.ball.y+this.ball.r >
-        height-this.paddle.height*0.5){         
-            this.paddle.posX-this.ball.r <=this.ball.x &&
-            this.ball.x<=this.paddle.posX+this.paddle.width+this.ball.r 
-            ? this.ball.dy=-this.ball.dy : this.stop("Game Over");
+        if(this.ball.y+this.ball.r > height-this.paddle.height*0.5){         //触底
+            this.paddle.posX <=this.ball.x &&
+            this.paddle.posX+this.paddle.width >=this.ball.x
+            ? this.ball.dy=-this.ball.dy : this.stop("游戏结束！你输了");
         }         
     }
-    /**
-     * [stop description]
-     * @param  {[type]} str 显示的字符串，分为失败与成功两种情况。
-     * @param  {[type]} f   回调函数
-     * @return {[type]}     [description]
-     */
+	//游戏结束
     Stage.prototype.stop=function(str){
-        ctx.font="30px Verdana";
-        // 创建渐变
+        ctx.font="30px Verdana";     
+		// 渐变色
+		var textWidth = ctx.measureText(str).width;
         var gradient=ctx.createLinearGradient(0,0,width,0);
-        gradient.addColorStop("0","magenta");
-        gradient.addColorStop("0.5","blue");
-        gradient.addColorStop("1.0","red");
-        // 用渐变填色
-        ctx.fillStyle=gradient;
-        ctx.fillText(str,220,380);
-
-        clearInterval(this.st);
-        stop_callBack();
+		gradient.addColorStop(0, '#C70039');
+		gradient.addColorStop(0.5, '#FF5733');
+		gradient.addColorStop(1, '#FFC300');
+   
+        ctx.fillStyle=gradient; 
+        ctx.fillText(str,width*0.5-textWidth*0.5,height*0.5 );
+        clearInterval(this.interval);
     }
-    //检测球是否和砖块发生碰撞。若碰撞则将该砖块的存在值置为0，并且球反弹
+    //砖块碰撞检测
     Stage.prototype.detectHitBricks=function(){
-        var scaleX=this.bricks.width+this.bricks.padding;//衡量横轴的尺度
-        var scaleY=this.bricks.height+this.bricks.padding;//衡量纵轴的尺度
-        var col = Math.floor(this.ball.x/scaleX);
+        var scaleX=this.bricks.width+this.bricks.padding;	//一格方块的宽高方位
+        var scaleY=this.bricks.height+this.bricks.padding;
+        var col = Math.floor(this.ball.x/scaleX);	//小球在哪个区块的位置
         var row = Math.floor(this.ball.y/scaleY);
-        //这里实际做的是：圆心若移动到某方块中，才去掉此方块
-        if(this.bricks.exists[row]!==undefined && 
+        if(this.bricks.exists[row]!==undefined && 	//该区块是否有方块
             this.bricks.exists[row][col]!==undefined &&
              this.bricks.exists[row][col] == 1){
-            // console.log(row,col);
             this.ball.dy=-this.ball.dy;
             this.bricks.exists[row][col]=0;
-            this.bricks.num--;//现有的砖块数减一
+            this.bricks.num--;
             if(this.bricks.num==0){
-                this.stop("You Win!")
+                this.stop(" 游戏结束，你赢了!")
             }
         }
 
@@ -172,7 +150,6 @@ var game=function(){
     //砖块数越少，ball的dx、dy要增加
     Stage.prototype.speedUp=function(){
         var speedIncreasement=(this.bricks.row-Math.ceil(this.bricks.num/this.bricks.col))*0.001;
-        // console.log('speed:',Math.abs(this.ball.dx), Math.abs(this.ball.dy))
         this.ball.dx>0?(this.ball.dx += speedIncreasement):(this.ball.dx -= speedIncreasement);
         this.ball.dy>0?(this.ball.dy += speedIncreasement):(this.ball.dy -= speedIncreasement);
     }
@@ -181,7 +158,7 @@ var game=function(){
         if(small>big) return ;
         return small+(big-small)*Math.random();
     }
-    //生成球的初始坐标
+    //生成球的初始坐标11111挡板上方
     Stage.prototype.initialPos=function(){
         var pos={};
         pos.y=this.generateRandom(250,550);
@@ -203,11 +180,12 @@ var game=function(){
     }
     Paddle.prototype.draw=function(){
         ctx.beginPath();
-        ctx.fillStyle='#A0522D';
+        ctx.fillStyle='#55007f';
         ctx.rect(this.posX,height-this.height,this.width,this.height);
         ctx.fill();
         ctx.closePath();
     }
+	//左右移动挡板
     Paddle.prototype.move=function(){
         if(right && !flag &&this.posX+this.width<=width)
             this.posX=this.posX+this.dx;
@@ -229,15 +207,40 @@ var game=function(){
                 }
     }
     return Stage;
-}()
+}
 
 function Init(){
-	var g=new game(function(){
-		setTimeout(function(){
-			window.location.reload(true);//2秒后刷新页面
-		},2000)
-	});
+	var startBtn = document.getElementById("start-btn");
+	startBtn.addEventListener("click", function() {
+		console.log("按钮被点击了");
+	    startBtn.style.display = "none";
+	var g=new game();//返回值对象是stage
 	g.run();//游戏运行
 }
 
 window.addEventListener("load",Init,false);
+<!DOCTYPE HTML>
+<html>
+
+<head>
+	<title>20990014陈熙民</title>
+	<meta http-equiv=Content-Type content="text/html;charset=utf-8">
+	<style> 
+		canvas{border: 2px solid #000}
+	</style>
+
+</head>
+
+<body>
+	<button id="start-btn" style="position:absolute; left:45%; top:45%; transform:translate(-50%,-50%); background-color:#4CAF50; color:white; font-size:24px;">开始游戏</button>
+	
+	<canvas id="myCanvas" width="500" height="700">您的浏览器不支持canvas,请更换浏览器！</canvas>
+	<script src="game.js"></script>
+</body>
+
+</html>
+
+
+
+
+
